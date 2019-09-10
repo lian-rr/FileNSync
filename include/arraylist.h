@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define INITIAL_CAPACITY (size_t)10
+#define INITIAL_CAPACITY ((size_t)10)
+#define MIN_INCREMENTAL_CAPACITY ((size_t)2)
 
 struct ArrayList
 {
@@ -68,16 +69,17 @@ arraylist_copy(struct ArrayList *original_arraylist, size_t capacity)
     return new_arraylist;
 }
 
-void arraylist_ensure_capacity(struct ArrayList *arraylist, int minCapacity)
+void arraylist_ensure_capacity(struct ArrayList **arraylist, int minCapacity)
 {
-    if (minCapacity > arraylist->_capacity)
+    if (minCapacity > (*arraylist)->_capacity)
     {
-        size_t old_capacity = arraylist->lenght;
+        size_t old_capacity = (*arraylist)->lenght;
         size_t new_capacity = old_capacity + (old_capacity >> 1);
-
-        arraylist = arraylist_copy(arraylist, new_capacity);
-        arraylist->lenght = old_capacity;
-        arraylist->_capacity = new_capacity;
+        if(new_capacity < MIN_INCREMENTAL_CAPACITY)
+            new_capacity = MIN_INCREMENTAL_CAPACITY;
+        *arraylist = arraylist_copy(*arraylist, new_capacity);
+        (*arraylist)->lenght = old_capacity;
+        (*arraylist)->_capacity = new_capacity;
     }
 }
 
@@ -93,34 +95,10 @@ void arraylist_destroy(struct ArrayList *arraylist)
     free(arraylist);
 }
 
-void arraylist_add(struct ArrayList *arraylist, void *val)
-{
-    int x = *((int *)val);
-    printf("X: %d\n", x);
-    arraylist_ensure_capacity(arraylist, (size_t)(arraylist->lenght) + 1);
-    arraylist->data[arraylist->lenght++] = val;
-}
-
-void arraylist_addInteger(struct ArrayList *arraylist, int val)
-{
-    int x = val;
-    printf("val: %d\n", x);
-    arraylist_add(arraylist, &x);
-}
-
-void arraylist_addFloat(struct ArrayList *arraylist, float val)
-{
-    arraylist_add(arraylist, &val);
-}
-
-void arraylist_addString(struct ArrayList *arraylist, char *val)
-{
-    arraylist_add(arraylist, val);
-}
-
-void arraylist_addChar(struct ArrayList *arraylist, char val)
-{
-    arraylist_add(arraylist, &val);
+void arraylist_add(struct ArrayList **arraylist, void *val)
+{    
+    arraylist_ensure_capacity(arraylist, (size_t)((*arraylist)->lenght) + 1);
+    (*arraylist)->data[(*arraylist)->lenght++] = val;
 }
 
 int arraylist_getInteger(struct ArrayList *arraylist, int pos)

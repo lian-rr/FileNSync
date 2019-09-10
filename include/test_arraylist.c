@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 #include "arraylist.h"
 
 int main(void)
@@ -18,7 +19,7 @@ int main(void)
 
     printf("Testing insertion...\n");
     int tmp = 100;
-    arraylist_add(al, &tmp);
+    arraylist_add(&al, &tmp);
     assert(al);
     assert(al->lenght == 1);
     assert(arraylist_get_size(al) == al->lenght);
@@ -29,6 +30,27 @@ int main(void)
     printf("Insert successful...\n");
     printf("========================================\n\n");
 
+    printf("Testing type-specific gets...\n");
+
+    assert(arraylist_getInteger(al, 0) == 100);
+
+    char a = 'a';
+    arraylist_add(&al, &a);
+    assert(arraylist_getChar(al, 1));
+
+    float f = 1.2;
+    arraylist_add(&al, &f);
+    assert(arraylist_getFloat(al, 2));
+
+    char *s = "Hello world!";
+    arraylist_add(&al, s);    
+    assert(strcmp(arraylist_getString(al, 3), s) == 0);
+
+    assert(al->_capacity == 10);
+
+    printf("Testing type-specific gets...\n");
+    printf("========================================\n\n");
+
     printf("Testing arraylist destruction...\n");
 
     arraylist_destroy(al);
@@ -36,27 +58,38 @@ int main(void)
     printf("Arraylist destruction successful...\n");
     printf("========================================\n\n");
 
-    printf("Testing convenience methods...\n");
+    printf("Testing arraylist grow...\n");
 
-    struct ArrayList *al2 = create_arraylist();
-    assert(arraylist_get_size(al2) == 0);
+    struct ArrayList *al2 = create_arraylist_with_capacity(1);
+    assert(al2);
+    assert(al2->lenght == 0);
+    assert(al2->_capacity == 1);
 
-    arraylist_addInteger(al2, 10);
-    arraylist_addInteger(al2, 20);
-    arraylist_addInteger(al2, 30);
+    arraylist_add(&al2, (int *)20);
+    arraylist_add(&al2, (int *)30);
 
-    assert(arraylist_get_size(al2) == 3);
-    assert(al2->_capacity == 10);
+    assert(al2->_capacity == 2);
 
-    printf("%d\n", arraylist_getInteger(al2, 0));
-    printf("%d\n", *(int *)(al2->data[0]));
-    printf("%d\n", *(int *)arraylist_get(al2, 0));
-    assert(arraylist_getInteger(al2, 0) == 10);
-    assert(arraylist_getInteger(al2, 1) == 20);
-    assert(arraylist_getInteger(al2, 2) == 30);
+    arraylist_add(&al2, (int *)40);
 
-    printf("Convenience methods successful...\n");
+    assert(al2->_capacity == 3);
+
+    arraylist_add(&al2, (int *)50);
+
+    assert(al2->_capacity == 4);
+
+    arraylist_add(&al2, (int *)60);
+
+    assert(al2->_capacity == 6);
+
+    arraylist_add(&al2, (int *)70);
+
+    assert(al2->_capacity == 6);
+
+    arraylist_add(&al2, (int *)80);
+
+    assert(al2->_capacity == 9);
+
+    printf("Arraylist grow successful...\n");
     printf("========================================\n\n");
-
-    arraylist_destroy(al2);
 }
