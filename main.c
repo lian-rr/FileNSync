@@ -1,8 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <sys/stat.h>
 
-void scan_dir(char* dir_name);
+struct File
+{
+    char *name;    /* File Name */
+    time_t c_time; /* Creation date */
+    time_t m_time; /* Modification date */
+    off_t st_size; /* File size */
+};
+
+void *open_dir(char *dir_path);
+int dir_size(DIR *d);
+void scan_dir(struct File **f_list, DIR *d);
 
 int main(int argc, char **argv)
 {
@@ -13,30 +24,79 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    printf("Reading file: %s\n", argv[1]);
+    printf("Reading files: %s\n", argv[1]);
 
-    scan_dir(argv[1]);
+    DIR *d = open_dir(argv[1]);
+
+    if (d == NULL)
+    {
+        printf("\n[Error] Not possible to open the directory with name: %s\n\n", argv[1]);
+        return 1;
+    }
+
+    int d_size = dir_size(d);
+
+    printf("Directory size: %d\n", d_size);
+
+    struct File **f_list = malloc(sizeof(struct File) * d_size);
+
+    scan_dir(f_list, d);
+
+    int i;
+    for (i = 0; i < d_size; i++)
+    {
+        printf("%s\n", f_list[i]->name);
+    }
+
+    //closing dir
+    closedir(d);
 
     return 0;
 }
 
-void scan_dir(char *dir_name)
+void *open_dir(char *dir_path)
 {
     DIR *d;
+
+    d = opendir(dir_path);
+
+    return d ? d : NULL;
+}
+
+int dir_size(DIR *d)
+{
+    int size = 0;
     struct dirent *dir;
 
-    d = opendir(dir_name);
-
-    if (d)
+    while ((dir = readdir(d)) != NULL)
     {
-        while ((dir = readdir(d)) != NULL)
-        {
-            printf("%s\n", dir->d_name);
-        }
-        closedir(d);
+        if (strcmp(dir->d_name, ".") == 0 ||
+            strcmp(dir->d_name, "..") == 0)
+            continue;
+        size++;
     }
-    else
+    return size;
+}
+
+void scan_dir(struct File **f_list, DIR *d)
+{
+    int len = 0;
+    struct dirent *dir;
+    printf("Pre while\n");
+    while ((dir = readdir(d)) != NULL)
     {
-        printf("Dir not open\n");
+        printf("I'm alive\n");
+        if (strcmp(dir->d_name, ".") == 0 ||
+            strcmp(dir->d_name, "..") == 0)
+            continue;
+
+        struct File f;
+
+        printf("File name: %s", dir->d_name);
+        f.name = dir->d_name;
+        printf("File name in struct: %s", f.name);
+
+        f_list[len++] = &f;
+        printf("File name in list of struct: %s", f_list[len-1]->name);
     }
 }
