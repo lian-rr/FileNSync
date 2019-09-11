@@ -15,6 +15,8 @@ struct File
 };
 
 struct ArrayList *list_dir(char *dir_path);
+void open_dir();
+int save_data(struct ArrayList *files);
 
 int main(int argc, char **argv)
 {
@@ -25,17 +27,19 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    printf("Reading files in: %s\n", argv[1]);
+    open_dir();
 
-    struct ArrayList *list = list_dir(argv[1]);
+    // printf("Reading files in: %s\n", argv[1]);
 
-    int i;
-    for (i = 0; i < arraylist_size(list); i++)
-    {
-        struct File *f = (struct File *)arraylist_get(list, i);
-        printf("[%d]: %s (Size: %zu)", i, f->name, f->size);
-        printf(" %s\n", ctime(&(f->m_time)));
-    }
+    // struct ArrayList *files = list_dir(argv[1]);
+
+    // int i;
+    // for (i = 0; i < arraylist_size(list); i++)
+    // {
+    //     struct File *f = (struct File *)arraylist_get(files, i);
+    //     printf("[%d]: %s (Size: %zu)", i, f->name, f->size);
+    //     printf(" %s\n", ctime(&(f->m_time)));
+    // }
 
     return 0;
 }
@@ -77,4 +81,32 @@ list_dir(char *dir_path)
 
     closedir(d);
     return list;
+}
+
+void open_dir()
+{
+    struct stat sb;
+
+    if (stat(".fileNsync", &sb) == -1)
+        mkdir(".fileNsync", 0700);
+}
+
+int save_data(struct ArrayList *files)
+{
+    FILE *df;
+
+    df = fopen(".fileNsync/localIndex", "w");
+
+    if (df == NULL)
+    {
+        printf("[Error]: Error opening localIndex...\n");
+        return -1;
+    }
+
+    int i;
+    for (i = 0; i < arraylist_size(files); i++)
+    {
+        struct File *f = arraylist_get(files, i);
+        printf("%s %zu %l", f->name, f->size, f->m_time);
+    }
 }
