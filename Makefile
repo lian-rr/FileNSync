@@ -1,5 +1,5 @@
 all:
-	gcc main.c -o main -Llib
+	gcc main.c -o main -Iinclude
 
 clean:
 	rm main
