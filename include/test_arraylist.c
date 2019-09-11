@@ -22,7 +22,7 @@ int main(void)
     arraylist_add(&al, &tmp);
     assert(al);
     assert(al->lenght == 1);
-    assert(arraylist_get_size(al) == al->lenght);
+    assert(arraylist_size(al) == al->lenght);
     assert(al->_capacity == 10);
     assert((int *)arraylist_get(al, 0) == (int *)al->data[0]);
     assert((int *)arraylist_get(al, 0) == &tmp);

@@ -1,5 +1,5 @@
-#ifndef ARRAYLIST_H
-#define ARRAYLIST_H
+#ifndef __ARRAYLIST_H__
+#define __ARRAYLIST_H__
 #endif
 
 #include <stdlib.h>
@@ -42,7 +42,7 @@ create_arraylist()
     return create_arraylist_with_capacity(INITIAL_CAPACITY);
 }
 
-size_t arraylist_get_size(struct ArrayList *arraylist)
+size_t arraylist_size(struct ArrayList *arraylist)
 {
     return arraylist->lenght;
 }
