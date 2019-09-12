@@ -29,17 +29,19 @@ int main(int argc, char **argv)
 
     open_dir();
 
-    // printf("Reading files in: %s\n", argv[1]);
+    printf("Reading files in: %s\n", argv[1]);
 
-    // struct ArrayList *files = list_dir(argv[1]);
+    struct ArrayList *files = list_dir(argv[1]);
 
-    // int i;
-    // for (i = 0; i < arraylist_size(list); i++)
-    // {
-    //     struct File *f = (struct File *)arraylist_get(files, i);
-    //     printf("[%d]: %s (Size: %zu)", i, f->name, f->size);
-    //     printf(" %s\n", ctime(&(f->m_time)));
-    // }
+    int i;
+    for (i = 0; i < arraylist_size(files); i++)
+    {
+        struct File *f = (struct File *)arraylist_get(files, i);
+        printf("[%d]: %s (Size: %zu)\n", i, f->name, f->size);
+        // printf(" %s\n", ctime(&(f->m_time)));
+    }
+
+    save_data(files);
 
     return 0;
 }
@@ -77,6 +79,8 @@ list_dir(char *dir_path)
         f->size = sb.st_size;
         f->m_time = sb.st_mtime;
         arraylist_add(&list, f);
+
+        free(file_path);
     }
 
     closedir(d);
@@ -107,6 +111,8 @@ int save_data(struct ArrayList *files)
     for (i = 0; i < arraylist_size(files); i++)
     {
         struct File *f = arraylist_get(files, i);
-        printf("%s %zu %l", f->name, f->size, f->m_time);
+        fprintf(df, "%s %zu\n", f->name, f->size);
     }
+
+    fclose(df);
 }
