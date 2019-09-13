@@ -4,7 +4,6 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <time.h>
-#include <sha.h>
 #include "arraylist.h"
 #include "utils.h"
 
