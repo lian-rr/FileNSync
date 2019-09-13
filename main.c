@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <time.h>
+#include <sha.h>
 #include "arraylist.h"
 #include "utils.h"
 
@@ -12,6 +13,7 @@ struct File
     char *name;    /* File Name */
     time_t m_time; /* Last modification date */
     off_t size;    /* File size */
+    unsigned char hash[SHA_DIGEST_LENGTH];        /*Hash of name (SHA1)*/
 };
 
 struct ArrayList *list_dir(char *dir_path);
@@ -37,8 +39,7 @@ int main(int argc, char **argv)
     for (i = 0; i < arraylist_size(files); i++)
     {
         struct File *f = (struct File *)arraylist_get(files, i);
-        printf("[%d]: %s (Size: %zu)\n", i, f->name, f->size);
-        // printf(" %s\n", ctime(&(f->m_time)));
+        printf("[%d]: %s (Size: %zu) %s\n", i, f->name, f->size, ctime(&(f->m_time)));
     }
 
     save_data(files);
@@ -63,8 +64,7 @@ list_dir(char *dir_path)
             strcmp(dir->d_name, "..") == 0)
             continue;
 
-        char *file_path = string_concat(dir_path, "/");
-        file_path = string_concat(file_path, dir->d_name);
+        char *file_path = string_concat(dir_path, dir->d_name);
 
         printf("Full path: %s\n", file_path);
 
@@ -75,7 +75,7 @@ list_dir(char *dir_path)
         }
 
         struct File *f = malloc(sizeof(struct File));
-        f->name = dir->d_name;
+        f->name = strdup(dir->d_name);
         f->size = sb.st_size;
         f->m_time = sb.st_mtime;
         arraylist_add(&list, f);
@@ -111,7 +111,7 @@ int save_data(struct ArrayList *files)
     for (i = 0; i < arraylist_size(files); i++)
     {
         struct File *f = arraylist_get(files, i);
-        fprintf(df, "%s %zu\n", f->name, f->size);
+        fprintf(df, "%s %zu %lu\n", f->name, f->size, (unsigned long)(f->m_time));
     }
 
     fclose(df);
