@@ -12,7 +12,6 @@ struct File
     char *name;    /* File Name */
     time_t m_time; /* Last modification date */
     off_t size;    /* File size */
-    unsigned char hash[SHA_DIGEST_LENGTH];        /*Hash of name (SHA1)*/
 };
 
 struct ArrayList *list_dir(char *dir_path);
