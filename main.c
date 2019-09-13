@@ -14,9 +14,10 @@ struct File
     off_t size;    /* File size */
 };
 
-struct ArrayList *list_dir(char *dir_path);
+struct ArrayList *list_dir(char *);
 void open_dir();
-int save_data(struct ArrayList *files);
+int save_data(struct ArrayList *);
+struct ArrayList *load_data();
 
 int main(int argc, char **argv)
 {
@@ -29,15 +30,19 @@ int main(int argc, char **argv)
 
     open_dir();
 
+    struct ArrayList *history = load_data();
+
     printf("Reading files in: %s\n", argv[1]);
 
     struct ArrayList *files = list_dir(argv[1]);
 
     int i;
-    for (i = 0; i < arraylist_size(files); i++)
+    for (i = 0; i < arraylist_size(history); i++)
     {
-        struct File *f = (struct File *)arraylist_get(files, i);
+        struct File *f = (struct File *)arraylist_get(history, i);
+        struct File *f2 = (struct File *)arraylist_get(files, i);
         printf("[%d]: %s (Size: %zu) %s\n", i, f->name, f->size, ctime(&(f->m_time)));
+        printf("[%d]: %s (Size: %zu) %s\n", i, f2->name, f2->size, ctime(&(f2->m_time)));
     }
 
     save_data(files);
@@ -109,8 +114,61 @@ int save_data(struct ArrayList *files)
     for (i = 0; i < arraylist_size(files); i++)
     {
         struct File *f = arraylist_get(files, i);
+        fprintf(df, "%zu\n", strlen(f->name));
         fprintf(df, "%s %zu %lu\n", f->name, f->size, (unsigned long)(f->m_time));
     }
 
     fclose(df);
+    return 0;
+}
+
+struct ArrayList *load_data()
+{
+    char *localIndex = ".fileNsync/localIndex";
+
+    struct stat sb;
+
+    if (stat(localIndex, &sb) != -1)
+    {
+        size_t lenght = sb.st_size;
+
+        FILE *df;
+        df = fopen(localIndex, "rt");
+
+        if (df == NULL)
+        {
+            printf("[Error]: Error opening localIndex...\n");
+            return NULL;
+        }
+
+        struct ArrayList *list = create_arraylist();
+
+        char line[512];
+        size_t name_size = 0;
+
+        int count = 0;
+        while (fgets(line, 512, df))
+        {
+            if (count % 2 == 0)
+            {
+                sscanf(line, "%zu", &name_size);
+            }
+            else
+            {
+                struct File *f = malloc(sizeof(struct File));
+
+                char *name = malloc(sizeof(char) * name_size);
+
+                sscanf(line, "%s %zu %lu", name, &(f->size), &(f->m_time));
+
+                f->name = strdup(name);
+                free(name);
+
+                arraylist_add(&list, f);
+            }
+            count++;
+        }
+        return list;
+    }
+    return NULL;
 }
