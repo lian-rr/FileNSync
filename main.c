@@ -14,10 +14,25 @@ struct File
     off_t size;    /* File size */
 };
 
-struct ArrayList *list_dir(char *);
+enum change_type
+{
+    created,
+    modified,
+    deleted
+};
+
+struct Change
+{
+    enum change_type type;
+    struct File *file;
+};
+
+struct ArrayList *
+list_dir(char *);
 void open_dir();
 int save_data(struct ArrayList *);
 struct ArrayList *load_data();
+struct ArrayList *find_differences(struct ArrayList *, struct ArrayList *);
 
 int main(int argc, char **argv)
 {
@@ -32,17 +47,25 @@ int main(int argc, char **argv)
 
     struct ArrayList *history = load_data();
 
-    printf("Reading files in: %s\n", argv[1]);
+    printf("\nReading files in: %s\n\n", argv[1]);
 
     struct ArrayList *files = list_dir(argv[1]);
 
+    // int i;
+    // for (i = 0; i < arraylist_size(history); i++)
+    // {
+    //     struct File *f = (struct File *)arraylist_get(history, i);
+    //     struct File *f2 = (struct File *)arraylist_get(files, i);
+    //     printf("[%d]: %s (Size: %zu) %s\n", i, f->name, f->size, ctime(&(f->m_time)));
+    //     printf("[%d]: %s (Size: %zu) %s\n", i, f2->name, f2->size, ctime(&(f2->m_time)));
+    // }
+
+    struct ArrayList *changes = find_differences(history, files);
     int i;
-    for (i = 0; i < arraylist_size(history); i++)
+    for (i = 0; i < arraylist_size(changes); i++)
     {
-        struct File *f = (struct File *)arraylist_get(history, i);
-        struct File *f2 = (struct File *)arraylist_get(files, i);
-        printf("[%d]: %s (Size: %zu) %s\n", i, f->name, f->size, ctime(&(f->m_time)));
-        printf("[%d]: %s (Size: %zu) %s\n", i, f2->name, f2->size, ctime(&(f2->m_time)));
+        struct Change *change = (struct Change *)arraylist_get(changes, i);
+        printf("File named: %s was :%d\n", change->file->name, change->type);
     }
 
     save_data(files);
@@ -64,12 +87,11 @@ list_dir(char *dir_path)
     while ((dir = readdir(d)) != NULL)
     {
         if (strcmp(dir->d_name, ".") == 0 ||
-            strcmp(dir->d_name, "..") == 0)
+            strcmp(dir->d_name, "..") == 0 ||
+            strcmp(dir->d_name, ".fileNsync") == 0)
             continue;
 
         char *file_path = string_concat(dir_path, dir->d_name);
-
-        printf("Full path: %s\n", file_path);
 
         if (stat(file_path, &sb) == -1)
         {
@@ -171,4 +193,89 @@ struct ArrayList *load_data()
         return list;
     }
     return NULL;
+}
+
+struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
+{
+    if (nf == NULL || arraylist_size(nf) == 0)
+        return of;
+    if (of == NULL || arraylist_size(of) == 0)
+        return nf;
+
+    struct ArrayList *df_list = create_arraylist();
+
+    int i, j, found;
+    for (i = 0; i < arraylist_size(of); i++)
+    {
+        found = 0;
+
+        struct File *f = (struct File *)arraylist_get(of, i);
+        printf("a %d\n", i);
+        for (j = 0; j < arraylist_size(nf); j++)
+        {
+            struct File *f2 = (struct File *)arraylist_get(nf, j);
+            printf("b %d\n", j);
+
+            if (strcmp(f->name, f2->name) == 0)
+            {
+                found = 1;
+                printf("c %d %d\n", i, j);
+                //File modified
+                if ((f->m_time != f2->m_time ||
+                     f->size != f2->size))
+                {
+                    printf("d\n");
+                    struct Change *change = malloc(sizeof(struct Change));
+                    change->type = created;
+                    change->file = f2;
+
+                    arraylist_add(&df_list, change);
+                    break;
+                }
+            }
+        }
+        printf("Hi\n");
+        //File deleted
+        if (!found)
+        {
+            struct Change *change = malloc(sizeof(struct Change));
+            change->type = deleted;
+            change->file = f;
+            arraylist_add(&df_list, change);
+        }
+    }
+
+    // for (i = 0; i < arraylist_size(nf); i++)
+    // {
+    //     found = 0;
+
+    //     struct File *f = (struct File *)arraylist_get(nf, i);
+
+    //     for (j = 0; j < arraylist_size(df_list); j++)
+    //     {
+    //         if (strcmp(f->name, ((struct Change *)arraylist_get(df_list, j))->file->name) == 0)
+    //         {
+    //             found = 1;
+    //             break;
+    //         }
+    //     }
+
+    //     if (found)
+    //         continue;
+
+    //     for (j = 0; j < arraylist_size(of); j++)
+    //     {
+    //         if (strcmp(f->name, ((struct File *)arraylist_get(of, j))->name) == 0)
+    //         {
+    //             found = 1;
+    //             break;
+    //         }
+    //     }
+
+    //     //new file
+    //     struct Change *change = malloc(sizeof(struct Change));
+    //     change->type = created;
+    //     change->file = f;
+    //     arraylist_add(&df_list, change);
+    // }
 }
