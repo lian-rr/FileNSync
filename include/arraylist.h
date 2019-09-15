@@ -1,9 +1,8 @@
-#ifndef __ARRAYLIST_H__
-#define __ARRAYLIST_H__
-#endif
-
 #include <stdlib.h>
 #include <stdio.h>
+
+#ifndef __ARRAYLIST_H__
+#define __ARRAYLIST_H__
 
 #define INITIAL_CAPACITY ((size_t)10)
 #define MIN_INCREMENTAL_CAPACITY ((size_t)2)
@@ -125,3 +124,5 @@ char arraylist_getChar(struct ArrayList *arraylist, int pos)
 {
     return *((char *)arraylist_get(arraylist, pos));
 }
+
+#endif
