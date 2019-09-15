@@ -17,8 +17,12 @@ void update_local_history(char *dir);
 void work_as_server();
 void work_as_client(char *address);
 
+void send_file_list(void *socket);
+struct ArrayList *receive_file_list(void *socket);
+
 char *msg_recv(void *socket, int flag);
 int msg_send(void *socket, char *msg);
+int msg_sendmore(void *socket, char *msg);
 
 int main(int argc, char **argv)
 {
@@ -113,6 +117,19 @@ void work_as_server()
     sprintf(buffer, "%lu", (unsigned long)c_time);
     msg_send(responder, buffer);
 
+    printf("\n====================================\n");
+    printf(" ==> Receiving list of files from client...");
+    printf("\n------------------------------------\n\n");
+
+    struct ArrayList *client_list = receive_file_list(responder);
+
+    int i;
+    for (i = 0; i < arraylist_size(client_list); i++)
+    {
+        struct File *f = arraylist_get(client_list, i);
+        printf("[%d]: %s (%zu) %s", i, f->name, f->size, ctime(&(f->m_time)));
+    }
+
     zmq_close(responder);
     zmq_ctx_destroy(context);
 }
@@ -143,19 +160,73 @@ void work_as_client(char *address)
 
     sscanf(request, "%lu", &server_time);
     free(request);
-    
+
     time_diff = difftime(c_time, server_time);
 
     printf("--> Server's current time %s\n", ctime(&server_time));
     printf("--> Time difference: %.f\n\n", time_diff);
 
+    printf("\n====================================\n");
+    printf(" ==> Sending list of files to the server...");
+    printf("\n------------------------------------\n\n");
+
+    send_file_list(requester);
+
     zmq_close(requester);
     zmq_ctx_destroy(context);
 }
 
+void send_file_list(void *socket)
+{
+    int i;
+    for (i = 0; i < arraylist_size(files); i++)
+    {
+        struct File *f = (struct File *)arraylist_get(files, i);
+
+        char *buffer = malloc(strlen(f->name) + sizeof(f->m_time) + sizeof(f->size));
+        sprintf(buffer, "%s %zu %lu\n", f->name, f->size, (unsigned long)(f->m_time));
+
+        if (i < arraylist_size(files) - 1)
+            msg_sendmore(socket, buffer);
+        else
+            msg_send(socket, buffer);
+    }
+}
+
+struct ArrayList *receive_file_list(void *socket)
+{
+    int more;
+    size_t more_size = sizeof(more);
+    char *data;
+
+    struct ArrayList *fl = create_arraylist();
+
+    do
+    {
+        data = msg_recv(socket, 0);
+
+        struct File *f = malloc(sizeof(struct File));
+
+        char *buf = malloc(sizeof(char) * 50);
+        time_t fm_date;
+
+        sscanf(data, "%s %zu %lu", buf, &(f->size), &fm_date);
+
+        f->m_time = fm_date + time_diff;
+        f->name = strdup(buf);
+        free(buf);
+
+        arraylist_add(&fl, f);
+
+        zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size);
+    } while (more);
+
+    return fl;
+}
+
 char *msg_recv(void *socket, int flag)
 {
-    char buffer[256];
+    char buffer[555];
     int size = zmq_recv(socket, buffer, 255, flag);
     if (size == -1)
         return NULL;
@@ -168,4 +239,9 @@ int msg_send(void *socket, char *msg)
     if (msg == NULL)
         return zmq_send(socket, NULL, 0, 0);
     return zmq_send(socket, msg, strlen(msg), 0);
+}
+
+int msg_sendmore(void *socket, char *msg)
+{
+    return zmq_send(socket, msg, strlen(msg), ZMQ_SNDMORE);
 }
