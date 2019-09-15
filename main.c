@@ -221,7 +221,6 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
                 if ((f->m_time != f2->m_time ||
                      f->size != f2->size))
                 {
-                    printf("File modification detected\n");
                     struct Change *change = malloc(sizeof(struct Change));
                     change->type = modified;
                     change->file = f2;
@@ -234,7 +233,6 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
         //File deleted
         if (!found)
         {
-            printf("File deletion detected\n");
             struct Change *change = malloc(sizeof(struct Change));
             change->type = deleted;
             change->file = f;
@@ -273,7 +271,6 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
             continue;
 
         //new file
-        printf("New File detected\n");
         struct Change *change = malloc(sizeof(struct Change));
         change->type = created;
         change->file = f;
