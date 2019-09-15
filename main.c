@@ -130,6 +130,14 @@ void work_as_server()
         printf("[%d]: %s (%zu) %s", i, f->name, f->size, ctime(&(f->m_time)));
     }
 
+    struct ArrayList *diffs = find_differences(files, client_list);
+
+    for (i = 0; i < arraylist_size(diffs); i++)
+    {
+        struct Change *change = (struct Change *)arraylist_get(diffs, i);
+        printf("\n -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
+    }
+
     zmq_close(responder);
     zmq_ctx_destroy(context);
 }
@@ -168,7 +176,7 @@ void work_as_client(char *address)
 
     printf("\n====================================\n");
     printf(" ==> Sending list of files to the server...");
-    printf("\n------------------------------------\n\n");
+    printf("\n------------------------------------\n");
 
     send_file_list(requester);
 
@@ -178,6 +186,9 @@ void work_as_client(char *address)
 
 void send_file_list(void *socket)
 {
+    if (arraylist_size(files) == 0)
+        msg_send(socket, 0);
+
     int i;
     for (i = 0; i < arraylist_size(files); i++)
     {
@@ -201,25 +212,35 @@ struct ArrayList *receive_file_list(void *socket)
 
     struct ArrayList *fl = create_arraylist();
 
-    do
+    data = msg_recv(socket, 0);
+
+    int lenght;
+    sscanf(data, "%d", &lenght);
+
+    zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size);
+
+    if (lenght > 0)
     {
-        data = msg_recv(socket, 0);
+        while (more)
+        {
+            data = msg_recv(socket, 0);
 
-        struct File *f = malloc(sizeof(struct File));
+            struct File *f = malloc(sizeof(struct File));
 
-        char *buf = malloc(sizeof(char) * 50);
-        time_t fm_date;
+            char *buf = malloc(sizeof(char) * 50);
+            time_t fm_date;
 
-        sscanf(data, "%s %zu %lu", buf, &(f->size), &fm_date);
+            sscanf(data, "%s %zu %lu", buf, &(f->size), &fm_date);
 
-        f->m_time = fm_date + time_diff;
-        f->name = strdup(buf);
-        free(buf);
+            f->m_time = fm_date + time_diff;
+            f->name = strdup(buf);
+            free(buf);
 
-        arraylist_add(&fl, f);
+            arraylist_add(&fl, f);
 
-        zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size);
-    } while (more);
+            zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size);
+        }
+    }
 
     return fl;
 }
