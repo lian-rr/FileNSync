@@ -46,6 +46,8 @@ int main(int argc, char **argv)
     open_dir();
 
     struct ArrayList *history = load_data();
+    if (history == NULL)
+        printf("History null\n");
 
     printf("\nReading files in: %s\n\n", argv[1]);
 
@@ -192,14 +194,32 @@ struct ArrayList *load_data()
     return NULL;
 }
 
+struct ArrayList *fill_with_changes_by_type(enum change_type type, struct ArrayList *files)
+{
+    struct ArrayList *changes = create_arraylist();
+    int i;
+    for (i = 0; i < arraylist_size(files); i++)
+    {
+        struct Change *change = malloc(sizeof(struct Change));
+        change->type = type;
+        change->file = (struct File *)arraylist_get(files, i);
+        arraylist_add(&changes, change);
+    }
+    return changes;
+}
+
 struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
 {
-    if (nf == NULL || arraylist_size(nf) == 0)
-        return of;
-    if (of == NULL || arraylist_size(of) == 0)
-        return nf;
-
     struct ArrayList *df_list = create_arraylist();
+
+    if (arraylist_is_empty(of) && arraylist_is_empty(nf))
+        return df_list;
+
+    if (arraylist_is_empty(of) && !arraylist_is_empty(nf))
+        return fill_with_changes_by_type(created, nf);
+
+    if (!arraylist_is_empty(of) && arraylist_is_empty(nf))
+        return fill_with_changes_by_type(deleted, of);
 
     int i, j, found;
     for (i = 0; i < arraylist_size(of); i++)

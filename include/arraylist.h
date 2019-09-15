@@ -75,7 +75,7 @@ void arraylist_ensure_capacity(struct ArrayList **arraylist, int minCapacity)
     {
         size_t old_capacity = (*arraylist)->lenght;
         size_t new_capacity = old_capacity + (old_capacity >> 1);
-        if(new_capacity < MIN_INCREMENTAL_CAPACITY)
+        if (new_capacity < MIN_INCREMENTAL_CAPACITY)
             new_capacity = MIN_INCREMENTAL_CAPACITY;
         *arraylist = arraylist_copy(*arraylist, new_capacity);
         (*arraylist)->lenght = old_capacity;
@@ -96,9 +96,14 @@ void arraylist_destroy(struct ArrayList *arraylist)
 }
 
 void arraylist_add(struct ArrayList **arraylist, void *val)
-{    
+{
     arraylist_ensure_capacity(arraylist, (size_t)((*arraylist)->lenght) + 1);
     (*arraylist)->data[(*arraylist)->lenght++] = val;
+}
+
+int arraylist_is_empty(struct ArrayList *arraylist)
+{
+    return (arraylist == NULL || arraylist->lenght == 0);
 }
 
 int arraylist_getInteger(struct ArrayList *arraylist, int pos)
