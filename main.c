@@ -65,7 +65,7 @@ int main(int argc, char **argv)
     for (i = 0; i < arraylist_size(changes); i++)
     {
         struct Change *change = (struct Change *)arraylist_get(changes, i);
-        printf("File named: %s was :%d\n", change->file->name, change->type);
+        printf("File named: %s was: %s\n", change->file->name, change->type == 0? "created" : change->type == 1? "modified" : "deleted");
     }
 
     save_data(files);
@@ -210,23 +210,20 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
         found = 0;
 
         struct File *f = (struct File *)arraylist_get(of, i);
-        printf("a %d\n", i);
         for (j = 0; j < arraylist_size(nf); j++)
         {
             struct File *f2 = (struct File *)arraylist_get(nf, j);
-            printf("b %d\n", j);
 
             if (strcmp(f->name, f2->name) == 0)
             {
                 found = 1;
-                printf("c %d %d\n", i, j);
                 //File modified
                 if ((f->m_time != f2->m_time ||
                      f->size != f2->size))
                 {
-                    printf("d\n");
+                    printf("File modification detected\n");
                     struct Change *change = malloc(sizeof(struct Change));
-                    change->type = created;
+                    change->type = modified;
                     change->file = f2;
 
                     arraylist_add(&df_list, change);
@@ -234,10 +231,10 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
                 }
             }
         }
-        printf("Hi\n");
         //File deleted
         if (!found)
         {
+            printf("File deletion detected\n");
             struct Change *change = malloc(sizeof(struct Change));
             change->type = deleted;
             change->file = f;
@@ -245,37 +242,43 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
         }
     }
 
-    // for (i = 0; i < arraylist_size(nf); i++)
-    // {
-    //     found = 0;
+    for (i = 0; i < arraylist_size(nf); i++)
+    {
+        found = 0;
 
-    //     struct File *f = (struct File *)arraylist_get(nf, i);
+        struct File *f = (struct File *)arraylist_get(nf, i);
 
-    //     for (j = 0; j < arraylist_size(df_list); j++)
-    //     {
-    //         if (strcmp(f->name, ((struct Change *)arraylist_get(df_list, j))->file->name) == 0)
-    //         {
-    //             found = 1;
-    //             break;
-    //         }
-    //     }
+        for (j = 0; j < arraylist_size(df_list); j++)
+        {
+            if (strcmp(f->name, ((struct Change *)arraylist_get(df_list, j))->file->name) == 0)
+            {
+                found = 1;
+                break;
+            }
+        }
 
-    //     if (found)
-    //         continue;
+        if (found)
+            continue;
 
-    //     for (j = 0; j < arraylist_size(of); j++)
-    //     {
-    //         if (strcmp(f->name, ((struct File *)arraylist_get(of, j))->name) == 0)
-    //         {
-    //             found = 1;
-    //             break;
-    //         }
-    //     }
+        for (j = 0; j < arraylist_size(of); j++)
+        {
+            if (strcmp(f->name, ((struct File *)arraylist_get(of, j))->name) == 0)
+            {
+                found = 1;
+                break;
+            }
+        }
 
-    //     //new file
-    //     struct Change *change = malloc(sizeof(struct Change));
-    //     change->type = created;
-    //     change->file = f;
-    //     arraylist_add(&df_list, change);
-    // }
+        if (found)
+            continue;
+
+        //new file
+        printf("New File detected\n");
+        struct Change *change = malloc(sizeof(struct Change));
+        change->type = created;
+        change->file = f;
+        arraylist_add(&df_list, change);
+    }
+
+    return df_list;
 }
