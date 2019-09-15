@@ -51,21 +51,12 @@ int main(int argc, char **argv)
 
     struct ArrayList *files = list_dir(argv[1]);
 
-    // int i;
-    // for (i = 0; i < arraylist_size(history); i++)
-    // {
-    //     struct File *f = (struct File *)arraylist_get(history, i);
-    //     struct File *f2 = (struct File *)arraylist_get(files, i);
-    //     printf("[%d]: %s (Size: %zu) %s\n", i, f->name, f->size, ctime(&(f->m_time)));
-    //     printf("[%d]: %s (Size: %zu) %s\n", i, f2->name, f2->size, ctime(&(f2->m_time)));
-    // }
-
     struct ArrayList *changes = find_differences(history, files);
     int i;
     for (i = 0; i < arraylist_size(changes); i++)
     {
         struct Change *change = (struct Change *)arraylist_get(changes, i);
-        printf("File named: %s was: %s\n", change->file->name, change->type == 0? "created" : change->type == 1? "modified" : "deleted");
+        printf("File named: %s was: %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
     }
 
     save_data(files);
@@ -84,6 +75,12 @@ list_dir(char *dir_path)
     struct stat sb;
     struct ArrayList *list = create_arraylist();
 
+    char *clean_path;
+    if (dir_path[strlen(dir_path) - 1] != '/')
+        clean_path = string_concat(dir_path, "/");
+    else
+        clean_path = dir_path;
+
     while ((dir = readdir(d)) != NULL)
     {
         if (strcmp(dir->d_name, ".") == 0 ||
@@ -91,7 +88,7 @@ list_dir(char *dir_path)
             strcmp(dir->d_name, ".fileNsync") == 0)
             continue;
 
-        char *file_path = string_concat(dir_path, dir->d_name);
+        char *file_path = string_concat(clean_path, dir->d_name);
 
         if (stat(file_path, &sb) == -1)
         {
