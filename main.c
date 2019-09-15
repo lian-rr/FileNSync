@@ -46,8 +46,6 @@ int main(int argc, char **argv)
     open_dir();
 
     struct ArrayList *history = load_data();
-    if (history == NULL)
-        printf("History null\n");
 
     printf("\nReading files in: %s\n\n", argv[1]);
 
