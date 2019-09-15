@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <zmq.h>
+#include <assert.h>
 #include "arraylist.h"
 #include "filehistory.h"
 
@@ -28,6 +30,16 @@ int main(int argc, char **argv)
     printf("Initializing server...");
     printf("\n------------------------------------\n\n");
 
+    void *context = zmq_ctx_new();
+
+    void *responder = zmq_socket(context, ZMQ_REP);
+    zmq_bind(responder, "tcp://*:5555");
+    assert(responder);
+
+    zmq_close(responder);
+    zmq_ctx_destroy(context);
+    return 0;
+
     return 0;
 }
 
@@ -35,9 +47,11 @@ void update_local_history(char *dir)
 {
     open_dir();
 
+    printf("--> Loading directory history\n");
+
     history = load_data();
 
-    printf("Reading files in: %s\n", dir);
+    printf("\n--> Reading files in: %s\n\n", dir);
 
     files = list_dir(dir);
 
@@ -46,8 +60,9 @@ void update_local_history(char *dir)
     for (i = 0; i < arraylist_size(changes); i++)
     {
         struct Change *change = (struct Change *)arraylist_get(changes, i);
-        printf("File named: %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
+        printf(" -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
     }
 
+    printf("\n--> Saving directory history updated\n");
     save_data(files);
 }
