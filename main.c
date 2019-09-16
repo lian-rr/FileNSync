@@ -13,6 +13,7 @@ struct ArrayList *changes;
 
 double time_diff;
 int first_sync;
+time_t c_time;              //Used as current time during execution
 
 void update_local_history(char *dir);
 void work_as_server();
@@ -33,6 +34,12 @@ int main(int argc, char **argv)
         printf("\n[Error] Please include the directory to sync.\n\n");
         return 1;
     }
+
+    //initialize time difference in 0
+    time_diff = 0;
+
+    //set local time
+    c_time = time(NULL);
 
     printf("\n====================================\n");
     printf(" ==> Updating local history...");
@@ -73,7 +80,7 @@ void update_local_history(char *dir)
 
     files = list_dir(dir);
 
-    changes = find_differences(history, files);
+    changes = find_differences(history, files, time_diff);
     int i;
     for (i = 0; i < arraylist_size(changes); i++)
     {
@@ -102,8 +109,7 @@ void work_as_server()
 
     //client first sync
     int c_first_sync;
-
-    time_t c_time = time(NULL);
+    
     time_t client_time;
 
     char *request;
@@ -141,7 +147,7 @@ void work_as_server()
     else if (arraylist_is_empty(files))
         diffs = fill_with_changes_by_type(created, client_list);
     else
-        diffs = find_differences(files, client_list);
+        diffs = find_differences(files, client_list, time_diff);
 
     if (!arraylist_is_empty(diffs))
     {
@@ -168,8 +174,6 @@ void work_as_client(char *address)
 
     int r = zmq_connect(requester, "tcp://localhost:5555");
     assert(r == 0);
-
-    time_t c_time = time(NULL);
 
     printf("--> Notifing server of first sync\n\n");
     printf("--> Sending current time to server %s\n", ctime(&c_time));

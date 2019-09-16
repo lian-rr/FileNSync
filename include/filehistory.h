@@ -33,8 +33,8 @@ int make_dir();
 struct ArrayList *list_dir(char *);
 int save_data(struct ArrayList *);
 struct ArrayList *load_data();
-struct ArrayList *find_differences(struct ArrayList *, struct ArrayList *);
-struct ArrayList *fill_with_changes_by_type(enum Change_type type, struct ArrayList *files);
+struct ArrayList *find_differences(struct ArrayList *, struct ArrayList *, double);
+struct ArrayList *fill_with_changes_by_type(enum Change_type, struct ArrayList *);
 
 struct ArrayList *
 list_dir(char *dir_path)
@@ -166,21 +166,7 @@ struct ArrayList *load_data()
     return NULL;
 }
 
-struct ArrayList *fill_with_changes_by_type(enum Change_type type, struct ArrayList *files)
-{
-    struct ArrayList *changes = create_arraylist();
-    int i;
-    for (i = 0; i < arraylist_size(files); i++)
-    {
-        struct Change *change = malloc(sizeof(struct Change));
-        change->type = type;
-        change->file = (struct File *)arraylist_get(files, i);
-        arraylist_add(&changes, change);
-    }
-    return changes;
-}
-
-struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
+struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf, double time_diff)
 {
     struct ArrayList *df_list = create_arraylist();
 
@@ -207,7 +193,7 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
             {
                 found = 1;
                 //File modified
-                if ((f->m_time != f2->m_time ||
+                if ((difftime((f->m_time) + time_diff, f->m_time) != 0 ||
                      f->size != f2->size))
                 {
                     struct Change *change = malloc(sizeof(struct Change));
@@ -267,4 +253,18 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
     }
 
     return df_list;
+}
+
+struct ArrayList *fill_with_changes_by_type(enum Change_type type, struct ArrayList *files)
+{
+    struct ArrayList *changes = create_arraylist();
+    int i;
+    for (i = 0; i < arraylist_size(files); i++)
+    {
+        struct Change *change = malloc(sizeof(struct Change));
+        change->type = type;
+        change->file = (struct File *)arraylist_get(files, i);
+        arraylist_add(&changes, change);
+    }
+    return changes;
 }
