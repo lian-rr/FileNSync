@@ -29,11 +29,12 @@ struct Change
 };
 #endif
 
-void open_dir();
+int make_dir();
 struct ArrayList *list_dir(char *);
 int save_data(struct ArrayList *);
 struct ArrayList *load_data();
 struct ArrayList *find_differences(struct ArrayList *, struct ArrayList *);
+struct ArrayList *fill_with_changes_by_type(enum Change_type type, struct ArrayList *files);
 
 struct ArrayList *
 list_dir(char *dir_path)
@@ -80,12 +81,16 @@ list_dir(char *dir_path)
     return list;
 }
 
-void open_dir()
+int make_dir()
 {
     struct stat sb;
 
     if (stat(".fileNsync", &sb) == -1)
+    {
         mkdir(".fileNsync", 0700);
+        return 1;
+    }
+    return 0;
 }
 
 int save_data(struct ArrayList *files)
@@ -120,8 +125,6 @@ struct ArrayList *load_data()
 
     if (stat(localIndex, &sb) != -1)
     {
-        size_t lenght = sb.st_size;
-
         FILE *df;
         df = fopen(localIndex, "rt");
 

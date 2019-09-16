@@ -12,6 +12,7 @@ struct ArrayList *files;
 struct ArrayList *changes;
 
 double time_diff;
+int first_sync;
 
 void update_local_history(char *dir);
 void work_as_server();
@@ -61,7 +62,8 @@ int main(int argc, char **argv)
 
 void update_local_history(char *dir)
 {
-    open_dir();
+    //first syncronization
+    first_sync = make_dir();
 
     printf("--> Loading directory history\n");
 
@@ -98,14 +100,18 @@ void work_as_server()
     printf(" ==> Waiting for client...");
     printf("\n------------------------------------\n\n");
 
-    char *request;
-    request = msg_recv(responder, 0);
+    //client first sync
+    int c_first_sync;
 
     time_t c_time = time(NULL);
-
     time_t client_time;
-    sscanf(request, "%lu", &client_time);
+
+    char *request;
+    request = msg_recv(responder, 0);
+    sscanf(request, "%d %lu", &c_first_sync, &client_time);
     free(request);
+
+    printf("--> Client first sync: %s\n\n", c_first_sync ? "yes" : "no");
 
     time_diff = difftime(c_time, client_time);
 
@@ -130,12 +136,27 @@ void work_as_server()
         printf("[%d]: %s (%zu) %s", i, f->name, f->size, ctime(&(f->m_time)));
     }
 
-    struct ArrayList *diffs = find_differences(files, client_list);
+    struct ArrayList *diffs = NULL;
 
-    for (i = 0; i < arraylist_size(diffs); i++)
+    if (arraylist_is_empty(client_list))
     {
-        struct Change *change = (struct Change *)arraylist_get(diffs, i);
-        printf("\n -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
+        if (c_first_sync)
+            diffs = create_arraylist();
+        else
+            diffs = fill_with_changes_by_type(deleted, files);
+    }
+    else if (arraylist_is_empty(files))
+        diffs = fill_with_changes_by_type(created, client_list);
+    else
+        diffs = find_differences(files, client_list);
+
+    if (!arraylist_is_empty(diffs))
+    {
+        for (i = 0; i < arraylist_size(diffs); i++)
+        {
+            struct Change *change = (struct Change *)arraylist_get(diffs, i);
+            printf("\n -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
+        }
     }
 
     zmq_close(responder);
@@ -156,11 +177,16 @@ void work_as_client(char *address)
 
     time_t c_time = time(NULL);
 
+    printf("--> Notifing server of first sync\n\n");
     printf("--> Sending current time to server %s\n", ctime(&c_time));
 
-    char buffer[20];
-    sprintf(buffer, "%lu", (unsigned long)c_time);
+    char *buffer = malloc(sizeof(char) * 20);
+
+    sprintf(buffer, "%d %lu", first_sync, (unsigned long)c_time);
+    printf("%s\n", buffer);
     msg_send(requester, buffer);
+
+    free(buffer);
 
     char *request = msg_recv(requester, 0);
 
