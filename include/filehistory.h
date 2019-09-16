@@ -30,6 +30,7 @@ struct Change
 #endif
 
 int make_dir();
+char *clean_path(char *);
 struct ArrayList *list_dir(char *);
 int save_data(struct ArrayList *);
 struct ArrayList *load_data();
@@ -47,12 +48,6 @@ list_dir(char *dir_path)
     struct stat sb;
     struct ArrayList *list = create_arraylist();
 
-    char *clean_path;
-    if (dir_path[strlen(dir_path) - 1] != '/')
-        clean_path = string_concat(dir_path, "/");
-    else
-        clean_path = dir_path;
-
     while ((dir = readdir(d)) != NULL)
     {
         if (strcmp(dir->d_name, ".") == 0 ||
@@ -60,7 +55,7 @@ list_dir(char *dir_path)
             strcmp(dir->d_name, ".fileNsync") == 0)
             continue;
 
-        char *file_path = string_concat(clean_path, dir->d_name);
+        char *file_path = string_concat(dir_path, dir->d_name);
 
         if (stat(file_path, &sb) == -1)
         {
@@ -91,6 +86,16 @@ int make_dir()
         return 1;
     }
     return 0;
+}
+
+char *clean_path(char *path)
+{
+    char *clean_path;
+    if (path[strlen(path) - 1] != '/')
+        clean_path = string_concat(path, "/");
+    else
+        clean_path = path;
+    return strdup(clean_path);
 }
 
 int save_data(struct ArrayList *files)

@@ -11,9 +11,10 @@ struct ArrayList *history;
 struct ArrayList *files;
 struct ArrayList *changes;
 
+char *wd;
 double time_diff;
 int first_sync;
-time_t c_time;              //Used as current time during execution
+time_t c_time; //Used as current time during execution
 
 void update_local_history(char *dir);
 void work_as_server();
@@ -21,10 +22,21 @@ void work_as_client(char *address);
 
 void send_file_list(void *socket);
 struct ArrayList *receive_file_list(void *socket);
+void update_local_dir(void *socket, struct ArrayList *changes);
+void serve_files(void *socket);
+void request_and_save_file(void *socket, char *filename);
+void send_requested_file(void *socket, char *filename);
 
 char *msg_recv(void *socket, int flag);
 int msg_send(void *socket, char *msg);
 int msg_sendmore(void *socket, char *msg);
+
+enum Command
+{
+    start,
+    send,
+    stop
+};
 
 int main(int argc, char **argv)
 {
@@ -41,11 +53,14 @@ int main(int argc, char **argv)
     //set local time
     c_time = time(NULL);
 
+    //clean working path
+    wd = clean_path(argv[1]);
+
     printf("\n====================================\n");
     printf(" ==> Updating local history...");
     printf("\n------------------------------------\n\n");
 
-    update_local_history(argv[1]);
+    update_local_history(wd);
 
     if (argc == 2)
     {
@@ -63,6 +78,8 @@ int main(int argc, char **argv)
 
         work_as_client(argv[2]);
     }
+
+    free(wd);
 
     return 0;
 }
@@ -109,7 +126,7 @@ void work_as_server()
 
     //client first sync
     int c_first_sync;
-    
+
     time_t client_time;
 
     char *request;
@@ -159,6 +176,12 @@ void work_as_server()
         }
     }
 
+    printf("\n====================================\n");
+    printf(" ==> Requesting files to client...");
+    printf("\n------------------------------------\n\n");
+
+    update_local_dir(responder, diffs);
+
     zmq_close(responder);
     zmq_ctx_destroy(context);
 }
@@ -202,6 +225,14 @@ void work_as_client(char *address)
     printf("\n------------------------------------\n");
 
     send_file_list(requester);
+
+    printf("--> List of files sent\n\n");
+
+    printf("\n====================================\n");
+    printf(" ==> Waiting for server to request files...");
+    printf("\n------------------------------------\n\n");
+
+    serve_files(requester);
 
     zmq_close(requester);
     zmq_ctx_destroy(context);
@@ -274,6 +305,122 @@ struct ArrayList *receive_file_list(void *socket)
     }
 
     return fl;
+}
+
+void serve_files(void *socket)
+{
+    enum Command cmd;
+
+    char *buf = msg_recv(socket, 0);
+    sscanf(buf, "%d", (int *)&cmd);
+
+    if (cmd == start)
+    {
+        do
+        {
+            char filename[50];
+
+            buf = msg_recv(socket, 0);
+            sscanf(buf, "%d %s", (int *)&cmd, filename);
+
+            printf(" -> Attempting to send %s --> ", filename);
+
+            send_requested_file(socket, filename);
+
+            printf("Sent\n\n");
+
+        } while (cmd == send);
+    }
+}
+
+void update_local_dir(void *socket, struct ArrayList *changes)
+{
+    if (!arraylist_is_empty(changes))
+    {
+        char *command = malloc(sizeof(char));
+
+        sprintf(command, "%d", start);
+        msg_send(socket, command);
+        free(command);
+
+        int i;
+        for (i = 0; i < arraylist_size(changes); i++)
+        {
+            struct Change *ch = (struct Change *)arraylist_get(changes, i);
+
+            printf(" -> Attempting to sync %s --> ", ch->file->name);
+
+            if (ch->type == created || ch->type == modified)
+                request_and_save_file(socket, ch->file->name);
+            //delete file if ch->type == deleted
+
+            printf(" Syncronized\n\n");
+        }
+
+        command = malloc(sizeof(char));
+        sprintf(command, "%d", stop);
+        msg_send(socket, command);
+        free(command);
+    }
+}
+
+void request_and_save_file(void *socket, char *filename)
+{
+    FILE *df;
+
+    char *full_path = string_concat(wd, filename);
+
+    df = fopen(full_path, "w");
+
+    if (df == NULL)
+    {
+        printf("[Error]: Error opening %s for writing...\n", full_path);
+        return;
+    }
+
+    char *command = malloc(sizeof(char) * strlen(filename) + 2);
+    sprintf(command, "%d %s", send, filename);
+    msg_send(socket, command);
+
+    int more;
+    size_t more_size = sizeof(more);
+    char *data;
+
+    do
+    {
+        data = msg_recv(socket, 0);
+
+        fprintf(df, "%s", data);
+
+        zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size);
+    } while (more);
+
+    fclose(df);
+}
+
+void send_requested_file(void *socket, char *filename)
+{
+    int buffer_size = 555; //move to constant
+    char *buffer = malloc(sizeof(char) * buffer_size);
+
+    FILE *fp;
+
+    char *full_path = string_concat(wd, filename);
+
+    fp = fopen(full_path, "r");
+    if (fp == NULL)
+    {
+        printf("[Error]: Error opening %s for reading...\n", full_path);
+        return;
+    }
+
+    while (fgets(buffer, buffer_size, fp) != NULL)
+    {
+        msg_sendmore(socket, buffer);
+    }
+
+    msg_send(socket, NULL);
+    fclose(fp);
 }
 
 char *msg_recv(void *socket, int flag)
