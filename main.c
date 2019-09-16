@@ -117,7 +117,7 @@ void work_as_server()
 
     printf("--> Current time: %s\n\n", ctime(&c_time));
     printf("--> Client's time: %s\n\n", ctime(&client_time));
-    printf("--> Time difference: %.f\n\n", time_diff);
+    printf("--> Time difference: %.f seconds\n\n", time_diff);
 
     char buffer[20];
     sprintf(buffer, "%lu", (unsigned long)c_time);
@@ -128,13 +128,6 @@ void work_as_server()
     printf("\n------------------------------------\n\n");
 
     struct ArrayList *client_list = receive_file_list(responder);
-
-    int i;
-    for (i = 0; i < arraylist_size(client_list); i++)
-    {
-        struct File *f = arraylist_get(client_list, i);
-        printf("[%d]: %s (%zu) %s", i, f->name, f->size, ctime(&(f->m_time)));
-    }
 
     struct ArrayList *diffs = NULL;
 
@@ -152,10 +145,11 @@ void work_as_server()
 
     if (!arraylist_is_empty(diffs))
     {
+        int i;
         for (i = 0; i < arraylist_size(diffs); i++)
         {
             struct Change *change = (struct Change *)arraylist_get(diffs, i);
-            printf("\n -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
+            printf(" -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
         }
     }
 
@@ -183,7 +177,6 @@ void work_as_client(char *address)
     char *buffer = malloc(sizeof(char) * 20);
 
     sprintf(buffer, "%d %lu", first_sync, (unsigned long)c_time);
-    printf("%s\n", buffer);
     msg_send(requester, buffer);
 
     free(buffer);
@@ -198,7 +191,7 @@ void work_as_client(char *address)
     time_diff = difftime(c_time, server_time);
 
     printf("--> Server's current time %s\n", ctime(&server_time));
-    printf("--> Time difference: %.f\n\n", time_diff);
+    printf("--> Time difference: %.f seconds\n\n", time_diff);
 
     printf("\n====================================\n");
     printf(" ==> Sending list of files to the server...");
@@ -212,8 +205,16 @@ void work_as_client(char *address)
 
 void send_file_list(void *socket)
 {
-    if (arraylist_size(files) == 0)
-        msg_send(socket, 0);
+    size_t len = arraylist_size(files);
+
+    if (len == 0)
+        msg_send(socket, "0");
+    else
+    {
+        char *lenbuf = malloc(sizeof(char) * sizeof(len));
+        sprintf(lenbuf, "%zu", len);
+        msg_sendmore(socket, lenbuf);
+    }
 
     int i;
     for (i = 0; i < arraylist_size(files); i++)
@@ -221,7 +222,7 @@ void send_file_list(void *socket)
         struct File *f = (struct File *)arraylist_get(files, i);
 
         char *buffer = malloc(strlen(f->name) + sizeof(f->m_time) + sizeof(f->size));
-        sprintf(buffer, "%s %zu %lu\n", f->name, f->size, (unsigned long)(f->m_time));
+        sprintf(buffer, "%s %zu %lu", f->name, f->size, (unsigned long)(f->m_time));
 
         if (i < arraylist_size(files) - 1)
             msg_sendmore(socket, buffer);
