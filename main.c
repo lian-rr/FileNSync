@@ -323,6 +323,9 @@ void serve_files(void *socket)
             buf = msg_recv(socket, 0);
             sscanf(buf, "%d %s", (int *)&cmd, filename);
 
+            if (cmd == stop)
+                break;
+
             printf(" -> Attempting to send %s --> ", filename);
 
             send_requested_file(socket, filename);
@@ -340,7 +343,7 @@ void update_local_dir(void *socket, struct ArrayList *changes)
         char *command = malloc(sizeof(char));
 
         sprintf(command, "%d", start);
-        msg_send(socket, command);
+        msg_sendmore(socket, command);
         free(command);
 
         int i;

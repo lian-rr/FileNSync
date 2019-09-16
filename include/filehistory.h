@@ -198,7 +198,7 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf, d
             {
                 found = 1;
                 //File modified
-                if ((difftime((f->m_time) + time_diff, f->m_time) != 0 ||
+                if ((difftime(f->m_time, (f->m_time) + time_diff) != 0 ||
                      f->size != f2->size))
                 {
                     struct Change *change = malloc(sizeof(struct Change));
