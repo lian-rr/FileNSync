@@ -27,6 +27,8 @@ void serve_files(void *socket);
 void request_and_save_file(void *socket, char *filename);
 void send_requested_file(void *socket, char *filename);
 
+void print_diff_list(struct ArrayList *diffs);
+
 char *msg_recv(void *socket, int flag);
 int msg_send(void *socket, char *msg);
 int msg_sendmore(void *socket, char *msg);
@@ -142,9 +144,11 @@ void work_as_server()
     printf("--> Client's time: %s\n\n", ctime(&client_time));
     printf("--> Time difference: %.f seconds\n\n", time_diff);
 
-    char buffer[20];
-    sprintf(buffer, "%lu", (unsigned long)c_time);
+    char *buffer = malloc(sizeof(char) * 20);
+    sprintf(buffer, "%d %lu", first_sync, (unsigned long)c_time);
     msg_send(responder, buffer);
+
+    free(buffer);
 
     printf("\n====================================\n");
     printf(" ==> Receiving list of files from client...");
@@ -166,21 +170,37 @@ void work_as_server()
     else
         diffs = find_differences(files, client_list, time_diff);
 
-    if (!arraylist_is_empty(diffs))
-    {
-        int i;
-        for (i = 0; i < arraylist_size(diffs); i++)
-        {
-            struct Change *change = (struct Change *)arraylist_get(diffs, i);
-            printf(" -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
-        }
-    }
+    print_diff_list(diffs);
 
     printf("\n====================================\n");
     printf(" ==> Requesting files to client...");
     printf("\n------------------------------------\n\n");
 
     update_local_dir(responder, diffs);
+
+    printf("\n====================================\n");
+    printf(" ==> Updating local history...");
+    printf("\n------------------------------------\n\n");
+
+    struct ArrayList *newfiles = list_dir(wd);
+
+    save_data(newfiles);
+
+    printf("--> Local history updated\n");
+
+    printf("\n====================================\n");
+    printf(" ==> Sending list of files to the client...");
+    printf("\n------------------------------------\n\n");
+
+    send_file_list(responder);
+
+    printf("--> List of files sent\n");
+
+    printf("\n====================================\n");
+    printf(" ==> Waiting for client to request files...");
+    printf("\n------------------------------------\n\n");
+
+    serve_files(responder);
 
     zmq_close(responder);
     zmq_ctx_destroy(context);
@@ -210,9 +230,12 @@ void work_as_client(char *address)
 
     char *request = msg_recv(requester, 0);
 
+    //client first sync
+    int s_first_sync;
+
     time_t server_time;
 
-    sscanf(request, "%lu", &server_time);
+    sscanf(request, "%d %lu", &s_first_sync, &server_time);
     free(request);
 
     time_diff = difftime(c_time, server_time);
@@ -222,17 +245,55 @@ void work_as_client(char *address)
 
     printf("\n====================================\n");
     printf(" ==> Sending list of files to the server...");
-    printf("\n------------------------------------\n");
+    printf("\n------------------------------------\n\n");
 
     send_file_list(requester);
 
-    printf("--> List of files sent\n\n");
+    printf("--> List of files sent\n");
 
     printf("\n====================================\n");
     printf(" ==> Waiting for server to request files...");
     printf("\n------------------------------------\n\n");
 
     serve_files(requester);
+
+    printf("\n====================================\n");
+    printf(" ==> Receiving list of files from server...");
+    printf("\n------------------------------------\n\n");
+
+    struct ArrayList *server_list = receive_file_list(requester);
+
+    struct ArrayList *diffs = NULL;
+
+    if (arraylist_is_empty(server_list))
+    {
+        if (s_first_sync)
+            diffs = create_arraylist();
+        else
+            diffs = fill_with_changes_by_type(deleted, files);
+    }
+    else if (arraylist_is_empty(files))
+        diffs = fill_with_changes_by_type(created, server_list);
+    else
+        diffs = find_differences(files, server_list, time_diff);
+
+    print_diff_list(diffs);
+
+    printf("\n====================================\n");
+    printf(" ==> Requesting files to client...");
+    printf("\n------------------------------------\n\n");
+
+    update_local_dir(requester, diffs);
+
+    printf("\n====================================\n");
+    printf(" ==> Updating local history...");
+    printf("\n------------------------------------\n\n");
+
+    struct ArrayList *newfiles = list_dir(wd);
+
+    save_data(newfiles);
+
+    printf("--> Local history updated\n");
 
     zmq_close(requester);
     zmq_ctx_destroy(context);
@@ -274,6 +335,7 @@ struct ArrayList *receive_file_list(void *socket)
 
     struct ArrayList *fl = create_arraylist();
 
+    printf("Receiving lisf of files\n");
     data = msg_recv(socket, 0);
 
     int lenght;
@@ -303,6 +365,7 @@ struct ArrayList *receive_file_list(void *socket)
             zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size);
         }
     }
+    free(data);
 
     return fl;
 }
@@ -334,6 +397,7 @@ void serve_files(void *socket)
 
         } while (cmd == send);
     }
+    msg_send(socket, NULL);
 }
 
 void update_local_dir(void *socket, struct ArrayList *changes)
@@ -364,6 +428,9 @@ void update_local_dir(void *socket, struct ArrayList *changes)
         sprintf(command, "%d", stop);
         msg_send(socket, command);
         free(command);
+
+        //closing exchange
+        msg_recv(socket, 0);
     }
 }
 
@@ -424,6 +491,19 @@ void send_requested_file(void *socket, char *filename)
 
     msg_send(socket, NULL);
     fclose(fp);
+}
+
+void print_diff_list(struct ArrayList *diffs)
+{
+    if (!arraylist_is_empty(diffs))
+    {
+        int i;
+        for (i = 0; i < arraylist_size(diffs); i++)
+        {
+            struct Change *change = (struct Change *)arraylist_get(diffs, i);
+            printf(" -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
+        }
+    }
 }
 
 char *msg_recv(void *socket, int flag)
