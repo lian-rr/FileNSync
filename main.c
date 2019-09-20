@@ -202,6 +202,12 @@ void work_as_server()
 
     serve_files(responder);
 
+    printf("--> All files sent\n");
+
+    printf("\n====================================\n");
+    printf(" ==> Closing fileNsync...");
+    printf("\n------------------------------------\n\n");
+
     zmq_close(responder);
     zmq_ctx_destroy(context);
 }
@@ -294,6 +300,10 @@ void work_as_client(char *address)
     save_data(newfiles);
 
     printf("--> Local history updated\n");
+
+    printf("\n====================================\n");
+    printf(" ==> Closing fileNsync...");
+    printf("\n------------------------------------\n\n");
 
     zmq_close(requester);
     zmq_ctx_destroy(context);
