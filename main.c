@@ -12,7 +12,7 @@ struct ArrayList *files;
 struct ArrayList *changes;
 
 char *wd;
-double time_diff;
+int time_diff;
 int first_sync;
 time_t c_time; //Used as current time during execution
 
@@ -26,6 +26,7 @@ void update_local_dir(void *socket, struct ArrayList *changes);
 void serve_files(void *socket);
 void request_and_save_file(void *socket, char *filename);
 void send_requested_file(void *socket, char *filename);
+int delete_file(char *filename);
 
 void print_diff_list(struct ArrayList *diffs);
 
@@ -51,9 +52,6 @@ int main(int argc, char **argv)
 
     //initialize time difference in 0
     time_diff = 0;
-
-    //set local time
-    c_time = time(NULL);
 
     //clean working path
     wd = clean_path(argv[1]);
@@ -129,24 +127,35 @@ void work_as_server()
     //client first sync
     int c_first_sync;
 
-    time_t client_time;
-
     char *request;
     request = msg_recv(responder, 0);
-    sscanf(request, "%d %lu", &c_first_sync, &client_time);
+    sscanf(request, "%d", &c_first_sync);
+
+    char *buffer = malloc(sizeof(char) * 20);
+    sprintf(buffer, "%d", first_sync);
+    msg_send(responder, buffer);
+
+    time_t client_time;
+
+    request = msg_recv(responder, 0);
+    sscanf(request, "%lu", &client_time);
     free(request);
 
     printf("--> Client first sync: %s\n\n", c_first_sync ? "yes" : "no");
 
-    time_diff = difftime(c_time, client_time);
+    //set local time
+    c_time = time(NULL);
 
-    printf("--> Current time: %s\n\n", ctime(&c_time));
-    printf("--> Client's time: %s\n\n", ctime(&client_time));
-    printf("--> Time difference: %.f seconds\n\n", time_diff);
+    printf("--> Sending current time to client %s\n", ctime(&c_time));
 
-    char *buffer = malloc(sizeof(char) * 20);
-    sprintf(buffer, "%d %lu", first_sync, (unsigned long)c_time);
+    sprintf(buffer, "%lu", (unsigned long)c_time);
     msg_send(responder, buffer);
+
+    time_diff = c_time - client_time;
+
+    printf("--> Current time: %s\n", ctime(&c_time));
+    printf("--> Client's time: %s\n", ctime(&client_time));
+    printf("--> Time difference: %d seconds\n\n", time_diff);
 
     free(buffer);
 
@@ -225,29 +234,43 @@ void work_as_client(char *address)
     assert(r == 0);
 
     printf("--> Notifing server of first sync\n\n");
-    printf("--> Sending current time to server %s\n", ctime(&c_time));
 
     char *buffer = malloc(sizeof(char) * 20);
 
-    sprintf(buffer, "%d %lu", first_sync, (unsigned long)c_time);
+    sprintf(buffer, "%d", first_sync);
+    msg_send(requester, buffer);
+
+    char *request = msg_recv(requester, 0);
+
+    //server first sync
+    int s_first_sync;
+
+    sscanf(request, "%d", &s_first_sync);
+
+    printf("--> Server first sync: %s\n\n", s_first_sync ? "yes" : "no");
+
+    //set local time
+    c_time = time(NULL);
+
+    printf("--> Sending current time to server %s\n", ctime(&c_time));
+
+    sprintf(buffer, "%lu", (unsigned long)c_time);
     msg_send(requester, buffer);
 
     free(buffer);
 
-    char *request = msg_recv(requester, 0);
-
-    //client first sync
-    int s_first_sync;
-
+    // server time
     time_t server_time;
 
-    sscanf(request, "%d %lu", &s_first_sync, &server_time);
+    request = msg_recv(requester, 0);
+    sscanf(request, "%lu", &server_time);
     free(request);
 
-    time_diff = difftime(c_time, server_time);
+    time_diff = c_time - server_time;
 
+    printf("--> Current time: %s\n", ctime(&c_time));
     printf("--> Server's current time %s\n", ctime(&server_time));
-    printf("--> Time difference: %.f seconds\n\n", time_diff);
+    printf("--> Time difference: %d seconds\n\n", time_diff);
 
     printf("\n====================================\n");
     printf(" ==> Sending list of files to the server...");
@@ -286,7 +309,7 @@ void work_as_client(char *address)
     print_diff_list(diffs);
 
     printf("\n====================================\n");
-    printf(" ==> Requesting files to client...");
+    printf(" ==> Requesting files to server...");
     printf("\n------------------------------------\n\n");
 
     update_local_dir(requester, diffs);
@@ -344,8 +367,6 @@ struct ArrayList *receive_file_list(void *socket)
     char *data;
 
     struct ArrayList *fl = create_arraylist();
-
-    printf("Receiving lisf of files\n");
     data = msg_recv(socket, 0);
 
     int lenght;
@@ -425,13 +446,22 @@ void update_local_dir(void *socket, struct ArrayList *changes)
         {
             struct Change *ch = (struct Change *)arraylist_get(changes, i);
 
-            printf(" -> Attempting to sync %s --> ", ch->file->name);
-
             if (ch->type == created || ch->type == modified)
-                request_and_save_file(socket, ch->file->name);
-            //delete file if ch->type == deleted
+            {
+                printf(" -> Attempting to sync %s --> ", ch->file->name);
 
-            printf(" Syncronized\n\n");
+                request_and_save_file(socket, ch->file->name);
+
+                printf(" Syncronized\n\n");
+            }
+            else if (ch->type == deleted)
+            {
+                printf(" -> Attempting to delete %s --> ", ch->file->name);
+
+                delete_file(ch->file->name);
+
+                printf(" Deleted\n\n");
+            }
         }
 
         command = malloc(sizeof(char));
@@ -501,6 +531,13 @@ void send_requested_file(void *socket, char *filename)
 
     msg_send(socket, NULL);
     fclose(fp);
+}
+
+int delete_file(char *filename)
+{
+    char *full_path = string_concat(wd, filename);
+
+    return remove(full_path);
 }
 
 void print_diff_list(struct ArrayList *diffs)

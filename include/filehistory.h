@@ -34,7 +34,7 @@ char *clean_path(char *);
 struct ArrayList *list_dir(char *);
 int save_data(struct ArrayList *);
 struct ArrayList *load_data();
-struct ArrayList *find_differences(struct ArrayList *, struct ArrayList *, double);
+struct ArrayList *find_differences(struct ArrayList *, struct ArrayList *, int);
 struct ArrayList *fill_with_changes_by_type(enum Change_type, struct ArrayList *);
 
 struct ArrayList *
@@ -171,7 +171,7 @@ struct ArrayList *load_data()
     return NULL;
 }
 
-struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf, double time_diff)
+struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf, int time_diff)
 {
     struct ArrayList *df_list = create_arraylist();
 
@@ -198,8 +198,8 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf, d
             {
                 found = 1;
                 //File modified
-                if ((difftime(f->m_time, (f->m_time) + time_diff) != 0 ||
-                     f->size != f2->size))
+                if (f->size != f2->size ||
+                    f->m_time - (f->m_time + time_diff) != 0)
                 {
                     struct Change *change = malloc(sizeof(struct Change));
                     change->type = modified;
