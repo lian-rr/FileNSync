@@ -197,7 +197,17 @@ void work_as_server()
         printf("--> Local history updated\n");
     }
     else
+    {
+        char *command = malloc(sizeof(char));
+        sprintf(command, "%d", stop);
+        msg_send(responder, command);
+        free(command);
+
+        //closing exchange
+        msg_recv(responder, 0);
+
         printf("--> No remote changes to sync\n");
+    }
 
     printf("\n====================================\n");
     printf(" ==> Sending list of files to the client...");
@@ -358,8 +368,18 @@ void work_as_client(char *address)
         printf("--> Local history updated\n");
     }
     else
+    {
+        char *command = malloc(sizeof(char));
+        sprintf(command, "%d", stop);
+        msg_send(requester, command);
+        free(command);
+
+        //closing exchange
+        msg_recv(requester, 0);
+
         printf("--> No remote changes to sync\n");
-    
+    }
+
     printf("\n====================================\n");
     printf(" ==> Saving local index...");
     printf("\n------------------------------------\n\n");
@@ -442,8 +462,8 @@ struct ArrayList *receive_file_list(void *socket)
     struct ArrayList *fl = create_arraylist();
     data = msg_recv(socket, 0);
 
-    int lenght;
-    sscanf(data, "%d", &lenght);
+    size_t lenght;
+    sscanf(data, "%zu", &lenght);
 
     zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size);
 
@@ -451,6 +471,8 @@ struct ArrayList *receive_file_list(void *socket)
     {
         while (more)
         {
+            data = msg_recv(socket, 0);
+
             struct File *f = malloc(sizeof(struct File));
 
             char *buf = malloc(sizeof(char) * 50);
@@ -462,8 +484,6 @@ struct ArrayList *receive_file_list(void *socket)
             arraylist_add(&fl, f);
 
             zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size);
-
-            data = msg_recv(socket, 0);
         }
     }
     free(data);
@@ -501,9 +521,10 @@ void serve_files(void *socket)
     msg_send(socket, NULL);
 }
 
-void update_local_dir(void *socket, struct ArrayList *changes)
+void update_local_dir(void *socket, struct ArrayList *lchanges)
 {
-    if (!arraylist_is_empty(changes))
+    printf("Is changes empty %d\n", arraylist_is_empty(lchanges));
+    if (!arraylist_is_empty(lchanges))
     {
         char *command = malloc(sizeof(char));
 
@@ -512,9 +533,9 @@ void update_local_dir(void *socket, struct ArrayList *changes)
         free(command);
 
         int i;
-        for (i = 0; i < arraylist_size(changes); i++)
+        for (i = 0; i < arraylist_size(lchanges); i++)
         {
-            struct Change *ch = (struct Change *)arraylist_get(changes, i);
+            struct Change *ch = (struct Change *)arraylist_get(lchanges, i);
 
             if (ch->type == created || ch->type == modified)
             {
@@ -649,13 +670,13 @@ struct ArrayList *calc_delta(struct ArrayList *local, struct ArrayList *remote)
             arraylist_add(&delta, remoteChange);
         else if (remoteChange->type == deleted)
         {
-            struct Change *localChange = (struct Change *)find_change_by_file_name(remote, remoteChange->file->name);
+            struct Change *localChange = (struct Change *)find_change_by_file_name(local, remoteChange->file->name);
             if (localChange == NULL)
                 arraylist_add(&delta, remoteChange);
         }
         else
         {
-            struct Change *localChange = (struct Change *)find_change_by_file_name(remote, remoteChange->file->name);
+            struct Change *localChange = (struct Change *)find_change_by_file_name(local, remoteChange->file->name);
             if (localChange != NULL && (localChange->type == modified))
             {
                 struct Change *change_cpy = malloc(sizeof(struct Change));
