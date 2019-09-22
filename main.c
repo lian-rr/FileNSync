@@ -523,7 +523,6 @@ void serve_files(void *socket)
 
 void update_local_dir(void *socket, struct ArrayList *lchanges)
 {
-    printf("Is changes empty %d\n", arraylist_is_empty(lchanges));
     if (!arraylist_is_empty(lchanges))
     {
         char *command = malloc(sizeof(char));
