@@ -11,6 +11,8 @@ struct ArrayList *history;
 struct ArrayList *files;
 struct ArrayList *changes;
 
+struct ArrayList *remote_history;
+
 char *wd;
 int time_diff;
 int first_sync;
@@ -24,10 +26,11 @@ void send_file_list(void *socket);
 struct ArrayList *receive_file_list(void *socket);
 void update_local_dir(void *socket, struct ArrayList *changes);
 void serve_files(void *socket);
-void request_and_save_file(void *socket, char *filename);
+void request_and_save_file(void *socket, char *filename, char *alt_name);
 void send_requested_file(void *socket, char *filename);
 int delete_file(char *filename);
 
+struct ArrayList *calc_delta(struct ArrayList *local, struct ArrayList *remote);
 void print_diff_list(struct ArrayList *diffs);
 
 char *msg_recv(void *socket, int flag);
@@ -62,6 +65,12 @@ int main(int argc, char **argv)
 
     update_local_history(wd);
 
+    printf("\n====================================\n");
+    printf(" ==> Loading remote history...");
+    printf("\n------------------------------------\n\n");
+
+    remote_history = load_data(REMOTE_INDEX_NAME);
+
     if (argc == 2)
     {
         printf("\n====================================\n");
@@ -91,13 +100,13 @@ void update_local_history(char *dir)
 
     printf("--> Loading directory history\n");
 
-    history = load_data();
+    history = load_data(LOCAL_INDEX_NAME);
 
     printf("\n--> Reading files in: %s\n\n", dir);
 
     files = list_dir(dir);
 
-    changes = find_differences(history, files, time_diff);
+    changes = find_differences(history, files);
     int i;
     for (i = 0; i < arraylist_size(changes); i++)
     {
@@ -106,7 +115,7 @@ void update_local_history(char *dir)
     }
 
     printf("--> Saving directory history updated\n");
-    save_data(files);
+    save_data(LOCAL_INDEX_NAME, files);
 }
 
 void work_as_server()
@@ -165,37 +174,52 @@ void work_as_server()
 
     struct ArrayList *client_list = receive_file_list(responder);
 
-    struct ArrayList *diffs = NULL;
+    printf("\n====================================\n");
+    printf(" ==> Saving remote index...");
+    printf("\n------------------------------------\n\n");
 
-    if (arraylist_is_empty(client_list))
+    save_data(REMOTE_INDEX_NAME, client_list);
+
+    printf("\n====================================\n");
+    printf(" ==> Comparing against previous remote index...");
+    printf("\n------------------------------------\n\n");
+
+    struct ArrayList *remoteChanges = find_differences(remote_history, client_list);
+    int i;
+    for (i = 0; i < arraylist_size(remoteChanges); i++)
     {
-        if (c_first_sync)
-            diffs = create_arraylist();
-        else
-            diffs = fill_with_changes_by_type(deleted, files);
+        struct Change *change = (struct Change *)arraylist_get(remoteChanges, i);
+        printf("\n -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
     }
-    else if (arraylist_is_empty(files))
-        diffs = fill_with_changes_by_type(created, client_list);
+
+    printf("\n====================================\n");
+    printf(" ==> Calculating delta with local index...");
+    printf("\n------------------------------------\n\n");
+
+    struct ArrayList *delta = calc_delta(changes, remoteChanges);
+
+    if (!arraylist_is_empty(delta))
+    {
+        print_diff_list(delta);
+
+        printf("\n====================================\n");
+        printf(" ==> Requesting files to client...");
+        printf("\n------------------------------------\n\n");
+
+        update_local_dir(responder, delta);
+
+        printf("\n====================================\n");
+        printf(" ==> Updating local history...");
+        printf("\n------------------------------------\n\n");
+
+        struct ArrayList *newfiles = list_dir(wd);
+
+        save_data(LOCAL_INDEX_NAME, newfiles);
+
+        printf("--> Local history updated\n");
+    }
     else
-        diffs = find_differences(files, client_list, time_diff);
-
-    print_diff_list(diffs);
-
-    printf("\n====================================\n");
-    printf(" ==> Requesting files to client...");
-    printf("\n------------------------------------\n\n");
-
-    update_local_dir(responder, diffs);
-
-    printf("\n====================================\n");
-    printf(" ==> Updating local history...");
-    printf("\n------------------------------------\n\n");
-
-    struct ArrayList *newfiles = list_dir(wd);
-
-    save_data(newfiles);
-
-    printf("--> Local history updated\n");
+        printf("--> No remote changes to sync\n");
 
     printf("\n====================================\n");
     printf(" ==> Sending list of files to the client...");
@@ -292,37 +316,52 @@ void work_as_client(char *address)
 
     struct ArrayList *server_list = receive_file_list(requester);
 
-    struct ArrayList *diffs = NULL;
+    printf("\n====================================\n");
+    printf(" ==> Saving remote index...");
+    printf("\n------------------------------------\n\n");
 
-    if (arraylist_is_empty(server_list))
+    save_data(REMOTE_INDEX_NAME, server_list);
+
+    printf("\n====================================\n");
+    printf(" ==> Comparing against previous remote index...");
+    printf("\n------------------------------------\n\n");
+
+    struct ArrayList *remoteChanges = find_differences(remote_history, server_list);
+    int i;
+    for (i = 0; i < arraylist_size(remoteChanges); i++)
     {
-        if (s_first_sync)
-            diffs = create_arraylist();
-        else
-            diffs = fill_with_changes_by_type(deleted, files);
+        struct Change *change = (struct Change *)arraylist_get(remoteChanges, i);
+        printf("\n -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
     }
-    else if (arraylist_is_empty(files))
-        diffs = fill_with_changes_by_type(created, server_list);
+
+    printf("\n====================================\n");
+    printf(" ==> Calculating delta with local index...");
+    printf("\n------------------------------------\n\n");
+
+    struct ArrayList *delta = calc_delta(changes, remoteChanges);
+
+    if (!arraylist_is_empty(delta))
+    {
+        print_diff_list(delta);
+
+        printf("\n====================================\n");
+        printf(" ==> Requesting files to server...");
+        printf("\n------------------------------------\n\n");
+
+        update_local_dir(requester, delta);
+
+        printf("\n====================================\n");
+        printf(" ==> Updating local history...");
+        printf("\n------------------------------------\n\n");
+
+        struct ArrayList *newfiles = list_dir(wd);
+
+        save_data(LOCAL_INDEX_NAME, newfiles);
+
+        printf("--> Local history updated\n");
+    }
     else
-        diffs = find_differences(files, server_list, time_diff);
-
-    print_diff_list(diffs);
-
-    printf("\n====================================\n");
-    printf(" ==> Requesting files to server...");
-    printf("\n------------------------------------\n\n");
-
-    update_local_dir(requester, diffs);
-
-    printf("\n====================================\n");
-    printf(" ==> Updating local history...");
-    printf("\n------------------------------------\n\n");
-
-    struct ArrayList *newfiles = list_dir(wd);
-
-    save_data(newfiles);
-
-    printf("--> Local history updated\n");
+        printf("--> No remote changes to sync\n");
 
     printf("\n====================================\n");
     printf(" ==> Closing fileNsync...");
@@ -450,9 +489,19 @@ void update_local_dir(void *socket, struct ArrayList *changes)
             {
                 printf(" -> Attempting to sync %s --> ", ch->file->name);
 
-                request_and_save_file(socket, ch->file->name);
+                if (ch->conflict)
+                {
+                    char *alt_name = malloc(sizeof(char) * strlen(ch->file->name) + sizeof(c_time));
+                    sprintf(alt_name, "%s-%lu", ch->file->name, (unsigned long)ctime);
 
-                printf(" Syncronized\n\n");
+                    request_and_save_file(socket, ch->file->name, alt_name);
+                    printf(" Syncronized with conflict\n\n");
+                }
+                else
+                {
+                    request_and_save_file(socket, ch->file->name, NULL);
+                    printf(" Syncronized\n\n");
+                }
             }
             else if (ch->type == deleted)
             {
@@ -474,11 +523,11 @@ void update_local_dir(void *socket, struct ArrayList *changes)
     }
 }
 
-void request_and_save_file(void *socket, char *filename)
+void request_and_save_file(void *socket, char *filename, char *alt_name)
 {
     FILE *df;
 
-    char *full_path = string_concat(wd, filename);
+    char *full_path = string_concat(wd, alt_name == NULL ? filename : alt_name);
 
     df = fopen(full_path, "w");
 
@@ -551,6 +600,44 @@ void print_diff_list(struct ArrayList *diffs)
             printf(" -> File named %s was %s\n", change->file->name, change->type == 0 ? "created" : change->type == 1 ? "modified" : "deleted");
         }
     }
+}
+
+struct ArrayList *calc_delta(struct ArrayList *local, struct ArrayList *remote)
+{
+    if ((arraylist_is_empty(local) && arraylist_is_empty(remote)) || (!arraylist_is_empty(local) && arraylist_is_empty(remote)))
+        return NULL;
+
+    struct ArrayList *delta = create_arraylist();
+
+    int i;
+    for (i = 0; i < arraylist_size(remote); i++)
+    {
+        struct Change *remoteChange = (struct Change *)arraylist_get(remote, i);
+
+        if (remoteChange->type == created)
+            arraylist_add(&delta, remoteChange);
+        else if (remoteChange->type == deleted)
+        {
+            struct Change *localChange = (struct Change *)find_change_by_file_name(remote, remoteChange->file->name);
+            if (localChange == NULL)
+                arraylist_add(&delta, remoteChange);
+        }
+        else
+        {
+            struct Change *localChange = (struct Change *)find_change_by_file_name(remote, remoteChange->file->name);
+            if (localChange != NULL && localChange->type == modified)
+            {
+                struct Change *change_cpy = malloc(sizeof(struct Change));
+                change_cpy->type = modified;
+                change_cpy->conflict = 1;
+                change_cpy->file = localChange->file;
+
+                arraylist_add(&delta, change_cpy);
+            }
+        }
+    }
+
+    return delta;
 }
 
 char *msg_recv(void *socket, int flag)

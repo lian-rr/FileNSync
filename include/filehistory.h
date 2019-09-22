@@ -8,6 +8,10 @@
 #ifndef __FILE_HISTORY_H__
 #define __FILE_HISTORY_H__
 
+#define FILE_N_SYNC_DIRECTORY ".fileNsync/"
+#define LOCAL_INDEX_NAME "localIndex"
+#define REMOTE_INDEX_NAME "remoteIndex"
+
 struct File
 {
     char *name;    /* File Name */
@@ -25,6 +29,7 @@ enum Change_type
 struct Change
 {
     enum Change_type type;
+    int conflict;
     struct File *file;
 };
 #endif
@@ -32,13 +37,13 @@ struct Change
 int make_dir();
 char *clean_path(char *);
 struct ArrayList *list_dir(char *);
-int save_data(struct ArrayList *);
-struct ArrayList *load_data();
-struct ArrayList *find_differences(struct ArrayList *, struct ArrayList *, int);
+int save_data(char *, struct ArrayList *);
+struct ArrayList *load_data(char *);
+struct ArrayList *find_differences(struct ArrayList *, struct ArrayList *);
 struct ArrayList *fill_with_changes_by_type(enum Change_type, struct ArrayList *);
+struct Change *find_change_by_file_name(struct ArrayList *, char *);
 
-struct ArrayList *
-list_dir(char *dir_path)
+struct ArrayList *list_dir(char *dir_path)
 {
     DIR *d;
 
@@ -98,15 +103,17 @@ char *clean_path(char *path)
     return strdup(clean_path);
 }
 
-int save_data(struct ArrayList *files)
+int save_data(char *filename, struct ArrayList *files)
 {
     FILE *df;
 
-    df = fopen(".fileNsync/localIndex", "w");
+    char *fullname = string_concat(FILE_N_SYNC_DIRECTORY, filename);
+
+    df = fopen(fullname, "w");
 
     if (df == NULL)
     {
-        printf("[Error]: Error opening localIndex...\n");
+        printf("[Error]: Error opening %s...\n", filename);
         return -1;
     }
 
@@ -122,9 +129,9 @@ int save_data(struct ArrayList *files)
     return 0;
 }
 
-struct ArrayList *load_data()
+struct ArrayList *load_data(char *filename)
 {
-    char *localIndex = ".fileNsync/localIndex";
+    char *localIndex = string_concat(FILE_N_SYNC_DIRECTORY, filename);
 
     struct stat sb;
 
@@ -171,7 +178,7 @@ struct ArrayList *load_data()
     return NULL;
 }
 
-struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf, int time_diff)
+struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf)
 {
     struct ArrayList *df_list = create_arraylist();
 
@@ -198,11 +205,11 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf, i
             {
                 found = 1;
                 //File modified
-                if (f->size != f2->size ||
-                    f->m_time - (f->m_time + time_diff) != 0)
+                if (f->size != f2->size || f->m_time - f2->m_time != 0)
                 {
                     struct Change *change = malloc(sizeof(struct Change));
                     change->type = modified;
+                    change->conflict = 0;
                     change->file = f2;
 
                     arraylist_add(&df_list, change);
@@ -215,6 +222,7 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf, i
         {
             struct Change *change = malloc(sizeof(struct Change));
             change->type = deleted;
+            change->conflict = 0;
             change->file = f;
             arraylist_add(&df_list, change);
         }
@@ -253,6 +261,7 @@ struct ArrayList *find_differences(struct ArrayList *of, struct ArrayList *nf, i
         //new file
         struct Change *change = malloc(sizeof(struct Change));
         change->type = created;
+        change->conflict = 0;
         change->file = f;
         arraylist_add(&df_list, change);
     }
@@ -272,4 +281,17 @@ struct ArrayList *fill_with_changes_by_type(enum Change_type type, struct ArrayL
         arraylist_add(&changes, change);
     }
     return changes;
+}
+
+struct Change *find_change_by_file_name(struct ArrayList *arraylist, char *filename)
+{
+    int i;
+    for (i = 0; i < arraylist_size(arraylist); i++)
+    {
+        struct Change *change = (struct Change *)arraylist_get(arraylist, i);
+
+        if (strcmp(change->file->name, filename) == 0)
+            return change;
+    }
+    return NULL;
 }
