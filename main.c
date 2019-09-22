@@ -685,6 +685,8 @@ struct ArrayList *calc_delta(struct ArrayList *local, struct ArrayList *remote)
 
                 arraylist_add(&delta, change_cpy);
             }
+            else
+                arraylist_add(&delta, remoteChange);
         }
     }
 
