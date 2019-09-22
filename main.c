@@ -14,7 +14,6 @@ struct ArrayList *changes;
 struct ArrayList *remote_history;
 
 char *wd;
-int time_diff;
 int first_sync;
 time_t c_time; //Used as current time during execution
 
@@ -52,9 +51,6 @@ int main(int argc, char **argv)
         printf("\n[Error] Please include the directory to sync.\n\n");
         return 1;
     }
-
-    //initialize time difference in 0
-    time_diff = 0;
 
     //clean working path
     wd = clean_path(argv[1]);
@@ -143,30 +139,12 @@ void work_as_server()
     char *buffer = malloc(sizeof(char) * 20);
     sprintf(buffer, "%d", first_sync);
     msg_send(responder, buffer);
-
-    time_t client_time;
-
-    request = msg_recv(responder, 0);
-    sscanf(request, "%lu", &client_time);
-    free(request);
+    free(buffer);
 
     printf("--> Client first sync: %s\n\n", c_first_sync ? "yes" : "no");
 
     //set local time
     c_time = time(NULL);
-
-    printf("--> Sending current time to client %s\n", ctime(&c_time));
-
-    sprintf(buffer, "%lu", (unsigned long)c_time);
-    msg_send(responder, buffer);
-
-    time_diff = c_time - client_time;
-
-    printf("--> Current time: %s\n", ctime(&c_time));
-    printf("--> Client's time: %s\n", ctime(&client_time));
-    printf("--> Time difference: %d seconds\n\n", time_diff);
-
-    free(buffer);
 
     printf("\n====================================\n");
     printf(" ==> Receiving list of files from client...");
@@ -238,6 +216,42 @@ void work_as_server()
     printf("--> All files sent\n");
 
     printf("\n====================================\n");
+    printf(" ==> Saving local index...");
+    printf("\n------------------------------------\n\n");
+
+    printf("--> Reading files in: %s\n\n", wd);
+
+    files = list_dir(wd);
+
+    printf("--> Saving directory history updated\n");
+    save_data(LOCAL_INDEX_NAME, files);
+
+    printf("\n====================================\n");
+    printf(" ==> Getting final state of client...");
+    printf("\n------------------------------------\n\n");
+
+    arraylist_destroy(client_list);
+    client_list = receive_file_list(responder);
+
+    printf("--> Received final state of client\n");
+
+    printf("\n====================================\n");
+    printf(" ==> Saving remote index...");
+    printf("\n------------------------------------\n\n");
+
+    save_data(REMOTE_INDEX_NAME, client_list);
+
+    printf("--> Saved the remote index\n");
+
+    printf("\n====================================\n");
+    printf(" ==> Sending final state...");
+    printf("\n------------------------------------\n\n");
+
+    send_file_list(responder);
+
+    printf("--> Final status of dir %s sent.\n", wd);
+
+    printf("\n====================================\n");
     printf(" ==> Closing fileNsync...");
     printf("\n------------------------------------\n\n");
 
@@ -263,6 +277,7 @@ void work_as_client(char *address)
 
     sprintf(buffer, "%d", first_sync);
     msg_send(requester, buffer);
+    free(buffer);
 
     char *request = msg_recv(requester, 0);
 
@@ -275,26 +290,6 @@ void work_as_client(char *address)
 
     //set local time
     c_time = time(NULL);
-
-    printf("--> Sending current time to server %s\n", ctime(&c_time));
-
-    sprintf(buffer, "%lu", (unsigned long)c_time);
-    msg_send(requester, buffer);
-
-    free(buffer);
-
-    // server time
-    time_t server_time;
-
-    request = msg_recv(requester, 0);
-    sscanf(request, "%lu", &server_time);
-    free(request);
-
-    time_diff = c_time - server_time;
-
-    printf("--> Current time: %s\n", ctime(&c_time));
-    printf("--> Server's current time %s\n", ctime(&server_time));
-    printf("--> Time difference: %d seconds\n\n", time_diff);
 
     printf("\n====================================\n");
     printf(" ==> Sending list of files to the server...");
@@ -364,6 +359,42 @@ void work_as_client(char *address)
     }
     else
         printf("--> No remote changes to sync\n");
+    
+    printf("\n====================================\n");
+    printf(" ==> Saving local index...");
+    printf("\n------------------------------------\n\n");
+
+    printf("--> Reading files in: %s\n\n", wd);
+
+    files = list_dir(wd);
+
+    printf("--> Saving directory history updated\n");
+    save_data(LOCAL_INDEX_NAME, files);
+
+    printf("\n====================================\n");
+    printf(" ==> Sending final state...");
+    printf("\n------------------------------------\n\n");
+
+    send_file_list(requester);
+
+    printf("--> Final status of dir %s sent.\n", wd);
+
+    printf("\n====================================\n");
+    printf(" ==> Getting final state of server...");
+    printf("\n------------------------------------\n\n");
+
+    arraylist_destroy(server_list);
+    server_list = receive_file_list(requester);
+
+    printf("--> Received final state of client\n");
+
+    printf("\n====================================\n");
+    printf(" ==> Saving remote index...");
+    printf("\n------------------------------------\n\n");
+
+    save_data(REMOTE_INDEX_NAME, server_list);
+
+    printf("--> Saved the remote index\n");
 
     printf("\n====================================\n");
     printf(" ==> Closing fileNsync...");
@@ -423,11 +454,8 @@ struct ArrayList *receive_file_list(void *socket)
             struct File *f = malloc(sizeof(struct File));
 
             char *buf = malloc(sizeof(char) * 50);
-            time_t fm_date;
 
-            sscanf(data, "%s %zu %lu", buf, &(f->size), &fm_date);
-
-            f->m_time = fm_date + time_diff;
+            sscanf(data, "%s %zu %lu", buf, &(f->size), &(f->m_time));
             f->name = strdup(buf);
             free(buf);
 
@@ -492,7 +520,7 @@ void update_local_dir(void *socket, struct ArrayList *changes)
             {
                 printf(" -> Attempting to sync %s --> ", ch->file->name);
 
-                if (ch->conflict)
+                if (ch->conflict == 1)
                 {
                     char *alt_name = malloc(sizeof(char) * strlen(ch->file->name) + sizeof(c_time));
                     sprintf(alt_name, "%s-%lu", ch->file->name, (unsigned long)ctime);
@@ -628,7 +656,7 @@ struct ArrayList *calc_delta(struct ArrayList *local, struct ArrayList *remote)
         else
         {
             struct Change *localChange = (struct Change *)find_change_by_file_name(remote, remoteChange->file->name);
-            if (localChange != NULL && localChange->type == modified)
+            if (localChange != NULL && (localChange->type == modified))
             {
                 struct Change *change_cpy = malloc(sizeof(struct Change));
                 change_cpy->type = modified;
