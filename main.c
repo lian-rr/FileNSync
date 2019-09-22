@@ -310,6 +310,8 @@ void work_as_client(char *address)
 
     serve_files(requester);
 
+    printf("--> Files served\n");
+
     printf("\n====================================\n");
     printf(" ==> Receiving list of files from server...");
     printf("\n------------------------------------\n\n");
@@ -382,6 +384,7 @@ void send_file_list(void *socket)
         char *lenbuf = malloc(sizeof(char) * sizeof(len));
         sprintf(lenbuf, "%zu", len);
         msg_sendmore(socket, lenbuf);
+        free(lenbuf);
     }
 
     int i;
@@ -417,8 +420,6 @@ struct ArrayList *receive_file_list(void *socket)
     {
         while (more)
         {
-            data = msg_recv(socket, 0);
-
             struct File *f = malloc(sizeof(struct File));
 
             char *buf = malloc(sizeof(char) * 50);
@@ -433,6 +434,8 @@ struct ArrayList *receive_file_list(void *socket)
             arraylist_add(&fl, f);
 
             zmq_getsockopt(socket, ZMQ_RCVMORE, &more, &more_size);
+
+            data = msg_recv(socket, 0);
         }
     }
     free(data);
