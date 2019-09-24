@@ -1,5 +1,5 @@
 all:
-	gcc main.c -o main -Iinclude -lzmq -Wall
+	gcc main.c -o fileNsync -Iinclude -lzmq -Wall
 
 clean:
 	rm main
